@@ -1,0 +1,270 @@
+- name: Vagrant Rails apps development
+  hosts: all
+  user: vagrant
+  become: yes
+  gather_facts: yes
+
+  roles:
+    - role: rvm.ruby
+      rvm1_rubies: ['ruby-2.6.6']
+      rvm1_bundler_install: true
+      rvm1_install_flags: '--auto-dotfiles --user-install'
+      rvm1_install_path: "/home/vagrant/.rvm"
+      rvm1_user: 'vagrant'
+      sudo: yes
+      tags: ruby
+
+
+  tasks:
+    - name: Install essential apps and tools
+      apt:
+        name: '{{ item }}'
+        state: present
+        update-cache: yes
+      with_items:
+        - htop
+        - curl
+        - vim
+        - lsof
+        - unzip
+        - p7zip-full
+        - postgresql-client
+        - gnupg
+        - software-properties-common
+      become: yes
+
+
+      # Python3
+      # =======
+    - name: Python3 - Install pip3 & Virtual env
+      apt:
+        name: '{{ item }}'
+        force: yes
+        state: present
+      with_items:
+        - python3-pip
+      become: yes
+      tags: python3
+      # END - Python Utils ===============
+
+
+      # Install Postgresql 10
+      # =====================
+    - name: Postgresql-10 - Install postgresql database and Dependencies
+      apt:
+        pkg: "{{ item }}"
+        update_cache: yes
+        state: present
+      with_items:
+      - postgresql-10
+      - postgresql-contrib-10
+      - libpq-dev
+      tags: postgresql
+
+    - name: Postgresql-10 - Install postgresql pip dependencies
+      pip:
+        name: psycopg2
+        state: present
+      tags: postgresql
+
+    - name: Postgresql-10 - Passwordless login for postgres user
+      copy:
+        src: "pg_hba_local.conf"
+        dest: "/etc/postgresql/10/main/pg_hba.conf"
+        owner: postgres
+        group: postgres
+        mode: 0640
+      register: pg_hba
+      tags: postgresql
+
+    - name: Postgresql-10 - Add database user
+      become_user: postgres
+      postgresql_user:
+        name: postgres
+        role_attr_flags: SUPERUSER
+      tags: postgresql
+
+    - name: Postgresql-10 - Enable postgresql to be access from host
+      replace:
+        path: "/etc/postgresql/10/main/postgresql.conf"
+        regexp: "^#listen_addresses = 'localhost'"
+        replace: "listen_addresses = '*'"
+      become: yes
+      tags: postgresql
+
+    - name: Postgresql-10 - Enable and start postgresql
+      systemd:
+        name: postgresql.service
+        enabled: yes
+        state: started
+      tags: postgresql
+
+    - name: Postgresql-10 - Restart service after customization
+      service:
+        name: postgresql.service
+        state: restarted
+      tags: postgresql
+      # END - Install Postgresql 10 ===============
+
+
+      # Nodejs 10
+      # ================
+    - name: Nodejs - Add apt repo
+      shell: "{{ item }}"
+      with_items:
+        - curl -sL https://deb.nodesource.com/setup_10.x | sudo bash
+      become: true
+      run_once: true
+      tags: nodejs
+
+    - name: Nodejs - Install nodejs
+      apt:
+        name: "{{ item }}"
+        state: present
+        update-cache: yes
+      become: true
+      with_items:
+        - nodejs
+      tags: nodejs
+      # END - Install Nodejs
+
+      # Yarn
+      # ================
+    - name: Yarn - add apt repo
+      shell: "{{ item }}"
+      with_items:
+        - curl -sS https://dl.yarnpkg.com/debian/pubkey.gpg | sudo apt-key add -
+        - echo "deb https://dl.yarnpkg.com/debian/ stable main" | sudo tee /etc/apt/sources.list.d/yarn.list
+      become: true
+      run_once: true
+      tags: yarn
+
+    - name: Yarn - Install yarn
+      apt:
+        name: "{{ item }}"
+        state: present
+        update-cache: yes
+      become: true
+      with_items:
+        - yarn
+      tags: yarn
+      # END - Install yarn
+
+      # Install Chrome & Chromedriver
+    - name: Add an Google Apt signing key
+      apt_key:
+        url: https://dl.google.com/linux/linux_signing_key.pub
+        state: present
+
+    - name: Install Google Chrome Dependency
+      apt:
+        name: libgconf2-4
+        update_cache: yes
+        state: present
+      become: yes
+      tags: chrome
+
+    - name: Install chrome package
+      apt:
+        deb: "http://dl.google.com/linux/chrome/deb/pool/main/g/google-chrome-stable/google-chrome-stable_{{ google_chrome_version }}_amd64.deb"
+      become: yes
+      vars:
+        google_chrome_version: 75.0.3770.142-1
+      tags: chrome
+      when: google_chrome_version != "current"
+
+    - name: Install chrome package
+      apt:
+        deb: "https://dl.google.com/linux/direct/google-chrome-stable_current_amd64.deb"
+      become: yes
+      vars:
+        google_chrome_version: 75.0.3770.142-1
+      tags: chrome
+      when: google_chrome_version == "current"
+
+    - name: Retrieve chromedriver version
+      uri:
+        url: "http://chromedriver.storage.googleapis.com/LATEST_RELEASE"
+        return_content: yes
+      register: latest_chromedriver_version
+      tags: chromedriver
+
+    - name: Download and extract chromedriver to /usr/local/bin
+      unarchive:
+        src: "https://chromedriver.storage.googleapis.com/{{ chromedriver_version | default(latest_chromedriver_version.content) }}/chromedriver_linux64.zip"
+        dest: /usr/local/bin
+        remote_src: yes
+        mode: 0755
+      become: yes
+      tags: chromedriver
+
+    - name: Set chromedriver as executable
+      file:
+        path: "/usr/local/bin/chromedriver"
+        mode: u+x
+      become: yes
+      tags: chromedriver
+      # END - Install Chrome & Chromedriver
+
+      # Environment variable
+    - name: Environment - Setup env variables
+      lineinfile:
+        dest: "/etc/environment"
+        state: present
+        regexp: "^{{ item }}"
+        line: "{{ item }}"
+      with_items:
+        - DATABASE_USERNAME=postgres
+        - DATABASE_PASSWORD=
+        - DATABASE_HOST=localhost
+        - DATABASE_PORT=5432
+        - DATABASE_NAME=glapp
+        - DATABASE_URL=postgres://postgres:@localhost:5432/glapp
+      tags: env
+      # END - Environment
+
+
+      # Custom Bashrc
+    - name: Custom alias
+      blockinfile:
+        state: present
+        path: "/home/vagrant/.bashrc"
+        insertafter: EOF
+        block: |
+          alias python=python3
+          alias py=python3
+          alias pip=pip3
+          alias rb=ruby
+          alias rs='rails s -b 0.0.0.0'
+          alias rc='rails c'
+          alias rr='rails routes'
+          alias rdb='rails db'
+          alias rac='rails assets:clobber'
+          alias rap='rails assets:precompile'
+          alias racp='rails assets:clobber; rails assets:precompile'
+          alias racps='rails assets:clobber; rails assets:precompile; rails s -b 0.0.0.0'
+          alias testall='bin/rspec; sh scripts/find_indexes.sh'
+          alias reset='rails db:drop; rails db:create; rails db:migrate; rails db:seed'
+      become: no
+      tags: bashrc
+
+    - name: Auto change dir to project root
+      lineinfile:
+        dest: "/home/vagrant/.bashrc"
+        line: "cd /vagrant/"
+        insertafter: EOF
+      become: no
+      tags: bashrc
+      # END - Custom bashrc
+
+
+      # DONE!
+    - name: Let them know
+      debug:
+        msg:
+          - '===================================================='
+          - '|                                                  |'
+          - '|            VAGRANT PROVISION FINISHED            |'
+          - '|                                                  |'
+          - '===================================================='
+      become: no
