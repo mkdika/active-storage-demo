@@ -6,8 +6,12 @@ class ArchivesController < ApplicationController
 
   def create
     @archive = Archive.new get_params
-    @archive.save
-    redirect_to archives_path
+    if @archive.save
+      message = "File upload successfully"
+    else
+      message = "File upload failed!"
+    end
+    redirect_to archives_path, notice: message
   end
 
   private

@@ -1,3 +1,4 @@
+
 <header>
   <div class="collapse bg-dark" id="navbarHeader">
     <div class="container">
@@ -25,10 +26,9 @@
 </header>
 
 <main role="main">
-
   <section class="jumbotron text-center">
     <div class="container">
-      <p class="lead text-muted">Please browse you files to upload something.</p>
+      <small>Please browse you files to upload something.</small>
       <p>
         <%= form_with(model: @archive, local: true) do |form| %>
 
@@ -37,7 +37,7 @@
             <div class="input-group">
               <div class="custom-file">
                 <%= form.file_field :fileku, class: "custom-file-input" %>
-                <label class="custom-file-label" for="archive_fileku">Choose file</label>
+                <label class="custom-file-label text-left" for="archive_fileku">Choose file</label>
               </div>
               <div class="input-group-append">
                 <%= form.submit 'Upload', class: 'btn btn-primary' %>

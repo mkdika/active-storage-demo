@@ -100,3 +100,5 @@ yarn-debug.log*
 # MINI PLENTY
 /public/ahoy/ahoy-mini-plenty.js
 /public/ahoy/mini-plenty/
+
+/storage/**
