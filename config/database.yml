@@ -80,6 +80,4 @@ test:
 #
 production:
   <<: *default
-  database: active_storage_demo_production
-  username: <%= ENV['ACTIVE_STORAGE_DEMO_DATABASE_USERNAME'] %>
-  password: <%= ENV['ACTIVE_STORAGE_DEMO_DATABASE_PASSWORD'] %>
+  url: <%= ENV["DATABASE_URL"] %>
